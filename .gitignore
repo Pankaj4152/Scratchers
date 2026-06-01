@@ -1,3 +1,8 @@
+.storage/
+sample
+venv_rag/
+
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[codz]
