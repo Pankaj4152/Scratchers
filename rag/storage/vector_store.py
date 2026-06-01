@@ -42,8 +42,8 @@ class SimpleVectorStore:
 
         for idx, doc_vec in enumerate(self.vectors):
             score = self._cosine_similarity(query_vec, doc_vec)
-            if score >= threshold:
-                scores.append((self.documents[idx], score))
+            # if score >= threshold:
+            scores.append((self.documents[idx], score))
 
         scores.sort(key=lambda x: x[1], reverse=True)
 

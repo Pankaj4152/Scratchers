@@ -1,17 +1,26 @@
 from pathlib import Path
+
+import dotenv
 from ingestion.loader import FileLoader
 from ingestion.chunker import RecursiveCharacterChunker
 from embeddings.base import EmbeddingEngine
 from storage.vector_store import SimpleVectorStore
-from config import STORAGE_FOLDER, CHUNK_SIZE, CHUNK_OVERLAP, SIMILARITY_THRESHOLD
+from config import STORAGE_FOLDER, CHUNK_SIZE, CHUNK_OVERLAP, SIMILARITY_THRESHOLD, LLM_MODEL, TOP_K
 
+from generation.llm import LLMOrchestrator
+from generation.prompt import PromptBuilder
 
+import os
+from dotenv import load_dotenv
+load_dotenv()
 
 chunker = RecursiveCharacterChunker(chunk_size=CHUNK_SIZE, chunk_overlap=CHUNK_OVERLAP)
 embedding_engine = EmbeddingEngine()
 store = SimpleVectorStore()
-
 store.load(directory=STORAGE_FOLDER)
+
+# Initialize the LLM engine once on boot
+llm_engine = LLMOrchestrator(model_name=LLM_MODEL)
 
 def add_doc(file_path: str):
     path_obj = Path(file_path)
@@ -40,9 +49,43 @@ def search(query: str):
         return []
     
     query_vector = embedding_engine.embed_query(query)
-    results = store.query(query_vector, top_k=2, threshold=SIMILARITY_THRESHOLD)
+    results = store.query(query_vector, top_k=TOP_K, threshold=SIMILARITY_THRESHOLD)
 
     return results
+
+def run_rag_pipeline(query: str):
+    if not store.documents:
+        print("The vector database is currently empty. Please add a document first!")
+        return
+
+    # 1. RETRIEVAL PHASE: Convert question to vector and find matched nodes
+    query_vector = embedding_engine.embed_query(query)
+    search_results = store.query(query_vector, top_k=3, threshold=SIMILARITY_THRESHOLD)
+
+    if not search_results:
+        print("\n[System]: No relevant document contexts passed the similarity threshold filter.")
+        return
+
+    # Extract just the Document entities from our (Document, Score) tuple results
+    retrieved_docs = [doc for doc, score in search_results]
+
+    # 2. PROMPT BUILDING PHASE: Wrap context and question together cleanly
+    final_prompt = PromptBuilder.build_rag_prompt(query, retrieved_docs)
+
+    # 3. GENERATION PHASE: Pass the structured payload to the target LLM
+    print("\nThinking... (Querying LLM Engine)")
+    llm_response = llm_engine.generate_response(final_prompt)
+
+    print("\n" + "="*50)
+    print(" ANSWER:")
+    print("="*50)
+    print(llm_response)
+    print("="*50)
+    
+    # Print semantic citations for transparency
+    print("\nSources Used:")
+    for doc, score in search_results:
+        print(f" - {doc.metadata.get('file_name')} (Similarity Score: {score:.4f}, Chunk: {doc.metadata.get('chunk_index')})")
 
 def main():
     print("Welcome to the RAG Demo! You can add documents and ask questions about them.")
@@ -58,12 +101,7 @@ def main():
             
             elif action == '2':
                 query = input("Enter your search query: ")
-                results = search(query)
-                if results:
-                    for doc, score in results:
-                        print(f"\n[Score: {score:.4f}] {doc.text} {doc.metadata['filename']} {doc.metadata['chunk_index']}")
-                else:
-                    print("No relevant documents found.")
+                run_rag_pipeline(query)
             
             elif action == '3':
                 print("Goodbye!")

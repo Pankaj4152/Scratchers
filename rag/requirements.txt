@@ -1,5 +1,7 @@
 pypdf
 python-docx
 torch
-sentence-transformers
+sentence-transformers 
 numpy
+python-dotenv
+google-genai
