@@ -1,5 +1,5 @@
 from pathlib import Path
-
+import hashlib
 import dotenv
 from ingestion.loader import FileLoader
 from ingestion.chunker import RecursiveCharacterChunker
@@ -22,23 +22,54 @@ store.load(directory=STORAGE_FOLDER)
 # Initialize the LLM engine once on boot
 llm_engine = LLMOrchestrator(model_name=LLM_MODEL)
 
+def calculate_file_hash(path: Path) -> str:
+    """Generates a SHA256 hash for the given file to detect changes."""
+    hasher = hashlib.sha256()
+    # Read as binary bytes to safely handle PDFs/Docx along with plain text
+    hasher.update(path.read_bytes())
+    return hasher.hexdigest()
+
+
 def add_doc(file_path: str):
     path_obj = Path(file_path)
     if not path_obj.exists():
         print(f"File not found: {file_path}")
         return
     
-    print(f"\nProcessing document: {path_obj.name}...")
+    # 1. Calculate the current file's content fingerprint
+    current_hash = calculate_file_hash(path_obj)
+    filename = path_obj.name
+
+    # 2. Check how this matches our existing vector store database
+    status = store.check_file_status(filename, current_hash)
+
+    if status == "UNCHANGED":
+        print(f"\n[Skip]: '{filename}' hasn't changed. No updates needed.")
+        return
     
-    # 1. load document data
+    elif status == "MODIFIED":
+        print(f"\n[Update]: Detected content modifications in '{filename}'. Overwriting old data...")
+        # Wipe out old entries from RAM before computing new ones
+        store.remove_document_by_filename(filename)
+    
+    else:
+        print(f"\n[New]: Processing new document: {filename}...")
+    
+    
+    # 3. Process the file data
     loader = FileLoader(path_obj)
     raw_docs = loader.load()
     
-    # split into chunks
+    # 4. Inject the file_hash into the raw document metadata before chunking
+    # This ensures every downstream chunk inherits the file fingerprint!
+    for doc in raw_docs:
+        doc.metadata["file_hash"] = current_hash
+
+    # 5. Run your standard chunking and vector processing pipeline
     chunks = chunker.split_document(raw_docs)
-    # embed chunks into vectors
     chunk_vectors = embedding_engine.embed_chunks(chunks)
-    # add to vector store
+
+    # 6. Save to storage matrix and persist safely to disk files
     store.add_documents(chunks, chunk_vectors)
     store.persist(directory=STORAGE_FOLDER)
     print("Progress saved and synced to disk storage.")

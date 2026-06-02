@@ -18,6 +18,46 @@ class SimpleVectorStore:
             # Convert the list of floats to a NumPy array for fast math operations
             self.vectors.append(np.array(emb))
 
+    def get_ingested_files(self) -> List[str]:
+        """
+        Returns a list of unique filenames that have been ingested into the vector store.
+        """
+        return {doc.metadata.get("filename") for doc in self.documents if doc.metadata}
+    
+    def check_file_status(self, filename: str, current_hash: str) -> str:
+        """
+        Checks the state of a file against the database.
+        Returns: 'NEW', 'UNCHANGED', or 'MODIFIED'
+        """
+        file_chunks = [doc for doc in self.documents if doc.metadata.get("filename") == filename]
+        stored_hash = file_chunks[0].metadata.get("filehash") if file_chunks else None
+        if not file_chunks:
+            return "NEW"
+        
+        if stored_hash == current_hash:
+            return "UNCHANGED"
+        return "MODIFIED"
+
+    def remove_document_by_filename(self, filename: str):
+        """
+        Deletes all text chunks and vector embeddings associated with a specific filename.
+        This cleans out old data completely before an overwrite.
+        """
+        new_docs = []
+        new_vecs = []
+
+        for doc, vec in zip(self.documents, self.vectors):
+            if doc.metadata.get("filename") != filename:
+                new_docs.append(doc)
+                new_vecs.append(vec)
+
+        deleted_count = len(self.documents) - len(new_docs)
+        self.documents = new_docs
+        self.vectors = new_vecs
+        if deleted_count > 0:
+            print(f"Purged {deleted_count} stale chunks of '{filename}' from memory database.")
+
+            
     def _cosine_similarity(self, v1 :np.ndarray, v2: np.ndarray) -> float:
         """
         Calculates the cosine similarity score between two vectors.
