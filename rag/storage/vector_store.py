@@ -22,15 +22,15 @@ class SimpleVectorStore:
         """
         Returns a list of unique filenames that have been ingested into the vector store.
         """
-        return {doc.metadata.get("filename") for doc in self.documents if doc.metadata}
+        return {doc.metadata.get("file_name") for doc in self.documents if doc.metadata}
     
     def check_file_status(self, filename: str, current_hash: str) -> str:
         """
         Checks the state of a file against the database.
         Returns: 'NEW', 'UNCHANGED', or 'MODIFIED'
         """
-        file_chunks = [doc for doc in self.documents if doc.metadata.get("filename") == filename]
-        stored_hash = file_chunks[0].metadata.get("filehash") if file_chunks else None
+        file_chunks = [doc for doc in self.documents if doc.metadata.get("file_name") == filename]
+        stored_hash = file_chunks[0].metadata.get("file_hash") if file_chunks else None
         if not file_chunks:
             return "NEW"
         
@@ -47,7 +47,7 @@ class SimpleVectorStore:
         new_vecs = []
 
         for doc, vec in zip(self.documents, self.vectors):
-            if doc.metadata.get("filename") != filename:
+            if doc.metadata.get("file_name") != filename:
                 new_docs.append(doc)
                 new_vecs.append(vec)
 
@@ -57,7 +57,7 @@ class SimpleVectorStore:
         if deleted_count > 0:
             print(f"Purged {deleted_count} stale chunks of '{filename}' from memory database.")
 
-            
+
     def _cosine_similarity(self, v1 :np.ndarray, v2: np.ndarray) -> float:
         """
         Calculates the cosine similarity score between two vectors.
