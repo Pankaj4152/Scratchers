@@ -23,6 +23,9 @@ class FileLoader:
     def load(self) -> List[Document]:
         """
         Load a file and return a list of Document objects.
+
+        Returns:
+            List[Document]: A list containing a single Document with the cleaned text and metadata.
         """
         if not self.path.exists():
             raise FileNotFoundError(

@@ -196,11 +196,14 @@ class RecursiveCharacterChunker(BaseChunker):
 
     def _split_recursive(self, text: str, separators: List[str]) -> List[str]:
         """Helper method for recursive splitting."""
+        if not separators:
+            return [text] if text.strip() else []
+        
         if len(text) <= self.chunk_size:
             return [text]
         
-        separator = self.separators[0]
-        remaining_separators = self.separators[1:] if len(self.separators) > 1 else self.separators
+        separator = separators[0]
+        remaining_separators = separators[1:] if len(separators) > 1 else separators
 
         if separator == "":
             splits = list(text)
