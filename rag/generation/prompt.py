@@ -11,7 +11,7 @@ class PromptBuilder:
         """
         context_block = ""
         for i, doc in enumerate(contexts, 1):
-            source_name = doc.metadata.get("filename", f"Unknown Source")
+            source_name = doc.metadata.get("file_name", f"Unknown Source")
             context_block += f"--- Context Chunk {i} (Source: {source_name}) ---\n"
             context_block += f"{doc.text}\n\n"
 
