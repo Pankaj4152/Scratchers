@@ -125,7 +125,7 @@ class SentenceChunker(BaseChunker):
             if sent.text.strip()
         ]                
 
-    def split_text(self, text: str):
+    def split_text(self, text: str) -> List[str]:
         if not text.strip():
             return []
 
@@ -164,7 +164,7 @@ class TokenChunker(BaseChunker):
             encoding_name
         )
 
-    def split_text(self, text):
+    def split_text(self, text: str) -> List[str]:
         tokens = self.encoding.encode(text)
         chunks = []
         start = 0
@@ -172,7 +172,9 @@ class TokenChunker(BaseChunker):
         while start < len(tokens):
             end = start + self.chunk_size
             chunk_tokens = tokens[start:end]
-            chunks.append(self.encoding.decode(chunk_tokens))
+            chunk_text = self.encoding.decode(chunk_tokens)
+            if chunk_text.strip():
+                chunks.append(chunk_text)
             start += (self.chunk_size - self.chunk_overlap)
 
         return chunks
@@ -187,9 +189,13 @@ class RecursiveCharacterChunker(BaseChunker):
         self.separators = ["\n\n", "\n", ". ","? ","! ", " ", ""]
 
     
-    
     def split_text(self, text: str) -> List[str]:
-        """Recursively splits the input text using the provided separators until the chunks are within the specified chunk size."""
+        """Recursively splits the input text using the provided separators."""
+        return self._split_recursive(text, self.separators)
+    
+
+    def _split_recursive(self, text: str, separators: List[str]) -> List[str]:
+        """Helper method for recursive splitting."""
         if len(text) <= self.chunk_size:
             return [text]
         
@@ -227,7 +233,7 @@ class RecursiveCharacterChunker(BaseChunker):
         final_chunks = []
         for chunk in chunks:
             if len(chunk) > self.chunk_size and remaining_separators != [""]:
-                final_chunks.extend(self.split_text(chunk, remaining_separators))
+                final_chunks.extend(self._split_recursive(chunk, remaining_separators))
             else:
                 final_chunks.append(chunk)
         return final_chunks
