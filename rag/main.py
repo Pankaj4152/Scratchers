@@ -66,7 +66,7 @@ def add_doc(file_path: str):
         doc.metadata["file_hash"] = current_hash
 
     # 5. Run your standard chunking and vector processing pipeline
-    chunks = chunker.split_document(raw_docs)
+    chunks = chunker.split_documents(raw_docs)
     chunk_vectors = embedding_engine.embed_chunks(chunks)
 
     # 6. Save to storage matrix and persist safely to disk files
