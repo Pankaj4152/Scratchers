@@ -10,6 +10,9 @@ from config import STORAGE_FOLDER, CHUNK_SIZE, CHUNK_OVERLAP, SIMILARITY_THRESHO
 from generation.llm import LLMOrchestrator
 from generation.prompt import PromptBuilder
 
+from evaluation.rag_evaluator import RAGEvaluator
+
+
 import os
 from dotenv import load_dotenv
 load_dotenv()
@@ -118,6 +121,19 @@ def run_rag_pipeline(query: str):
     for doc, score in search_results:
         print(f" - {doc.metadata.get('file_name')} (Similarity Score: {score:.4f}, Chunk: {doc.metadata.get('chunk_index')})")
 
+    # 4 EVALUATION PHASE 
+    evaluator = RAGEvaluator(llm_engine.client)
+    eval_result = evaluator.evaluate_rag_pipeline(
+        query=query,
+        answer=llm_response,
+        retrieved_docs=retrieved_docs,
+        expected_keywords=query.split(),  # Simple heuristic
+        retrieval_weight=0.3,
+        generation_weight=0.7
+    )
+    evaluator.print_evaluation_report(eval_result)
+
+    
 def main():
     print("Welcome to the RAG Demo! You can add documents and ask questions about them.")
 
