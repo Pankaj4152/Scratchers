@@ -9,3 +9,4 @@ Planned scratch implementations include:
 - Chatbot
 - Transformer
 - Anything else I learn and want to understand deeply
+- Neural Network
