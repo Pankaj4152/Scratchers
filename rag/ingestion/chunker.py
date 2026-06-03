@@ -3,6 +3,9 @@ from config import *
 from ingestion.document import Document
 import re
 from abc import ABC, abstractmethod
+from enum import Enum
+import tiktoken
+
 
 class BaseChunker(ABC):
     """
@@ -65,7 +68,115 @@ class ParagraphChunker(BaseChunker):
         ]
 
 
+class SentenceTokenizerType(Enum):
+    REGEX = "regex"
+    NLTK = "nltk"
+    SPACY = "spacy"
 
+class SentenceChunker(BaseChunker):
+
+    def __init__(self, tokenizer_type: SentenceTokenizerType = SentenceTokenizerType.REGEX):
+
+        self.tokenizer_type = tokenizer_type
+
+        if tokenizer_type == SentenceTokenizerType.SPACY:
+            import spacy
+            self.nlp = spacy.blank("en")
+            self.nlp.add_pipe("sentencizer")
+            # self.nlp = spacy.load(
+            #     SPACY_MODEL,
+            #     disable=[
+            #         "tagger",
+            #         "ner",
+            #         "lemmatizer",
+            #         "attribute_ruler"
+            #     ]
+            # )
+        elif tokenizer_type == SentenceTokenizerType.NLTK:
+            try:
+                from nltk.tokenize import PunktSentenceTokenizer
+                self.tokenizer = PunktSentenceTokenizer()
+            except Exception as e:
+                raise RuntimeError(
+                    "NLTK Punkt tokenizer is not available."
+                ) from e
+            
+    def _regex_split(
+        self,
+        text: str
+    ):
+        return [
+            s.strip()
+            for s in re.split(
+                r'(?<=[.!?])\s+',
+                text
+            )
+            if s.strip()
+        ]
+    
+    def _nltk_split(self, text: str):
+        return self.tokenizer.tokenize(text)
+
+    def _spacy_split(self, text: str):
+        doc = self.nlp(text)
+        return [
+            sent.text.strip()
+            for sent in doc.sents
+            if sent.text.strip()
+        ]                
+
+    def split_text(self, text: str):
+        if not text.strip():
+            return []
+
+        # if self.tokenizer_type == SentenceTokenizerType.REGEX:
+        #     return self._regex_split(text)
+
+        # elif self.tokenizer_type == SentenceTokenizerType.NLTK:
+        #     return self._nltk_split(text)
+
+        # elif self.tokenizer_type == SentenceTokenizerType.SPACY:
+        #     return self._spacy_split(text)
+        methods = {
+            SentenceTokenizerType.REGEX: self._regex_split,
+            SentenceTokenizerType.NLTK: self._nltk_split,
+            SentenceTokenizerType.SPACY: self._spacy_split,
+        }
+
+        try:
+            return methods[self.tokenizer_type](text)
+        except KeyError:
+            raise ValueError(
+                f"Unsupported tokenizer: {self.tokenizer_type}"
+            )                                       
+
+
+class TokenChunker(BaseChunker):
+    def __init__(
+        self,
+        chunk_size=500,
+        chunk_overlap=50,
+        encoding_name="cl100k_base"
+    ):
+        self.chunk_size = chunk_size
+        self.chunk_overlap = chunk_overlap
+        self.encoding = tiktoken.get_encoding(
+            encoding_name
+        )
+
+    def split_text(self, text):
+        tokens = self.encoding.encode(text)
+        chunks = []
+        start = 0
+
+        while start < len(tokens):
+            end = start + self.chunk_size
+            chunk_tokens = tokens[start:end]
+            chunks.append(self.encoding.decode(chunk_tokens))
+            start += (self.chunk_size - self.chunk_overlap)
+
+        return chunks
+    
 
 
 class RecursiveCharacterChunker(BaseChunker):
@@ -77,13 +188,13 @@ class RecursiveCharacterChunker(BaseChunker):
 
     
     
-    def split_text(self, text: str, separators: List[str]) -> List[str]:
+    def split_text(self, text: str) -> List[str]:
         """Recursively splits the input text using the provided separators until the chunks are within the specified chunk size."""
         if len(text) <= self.chunk_size:
             return [text]
         
-        separator = separators[0]
-        remaining_separators = separators[1:] if len(separators) > 1 else separators
+        separator = self.separators[0]
+        remaining_separators = self.separators[1:] if len(self.separators) > 1 else self.separators
 
         if separator == "":
             splits = list(text)
@@ -116,7 +227,7 @@ class RecursiveCharacterChunker(BaseChunker):
         final_chunks = []
         for chunk in chunks:
             if len(chunk) > self.chunk_size and remaining_separators != [""]:
-                final_chunks.extend(self._split_text(chunk, remaining_separators))
+                final_chunks.extend(self.split_text(chunk, remaining_separators))
             else:
                 final_chunks.append(chunk)
         return final_chunks

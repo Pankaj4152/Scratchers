@@ -8,3 +8,5 @@ SIMILARITY_THRESHOLD = 0.3
 
 # Gemini Configurations
 LLM_MODEL = "gemini-2.5-flash"
+
+SPACY_MODEL = "en_core_web_sm"
